@@ -66,7 +66,7 @@ pub fn process_unique_path(dir: &Path, basename: &str) -> PathBuf {
 }
 
 /// Env var that disables the pinned-artifact SHA-256 verification when set.
-const INTEGRITY_BYPASS_ENV: &str = "SHIP_INTEGRITY_CHECKS";
+const INTEGRITY_BYPASS_ENV: &str = "SKIP_INTEGRITY_CHECKS";
 
 fn integrity_checks_disabled() -> bool {
     matches!(
@@ -86,7 +86,7 @@ fn integrity_checks_disabled() -> bool {
 /// using a user-supplied URL whose targets are unknown. Verification (and a
 /// fresh download attempt) is retried up to three times before failing.
 /// Integrity verification can be skipped entirely by setting
-/// `SHIP_INTEGRITY_CHECKS=1` in the environment.
+/// `SKIP_INTEGRITY_CHECKS=1` in the environment.
 /// On verification failure the file is removed so the next run re-downloads.
 pub fn ensure_cached_binary(
     cached: &Path,

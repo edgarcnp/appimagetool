@@ -108,7 +108,7 @@ Every CLI option has a matching env var (shown above). A few extra knobs that ar
 | `DEVEL_RELEASE`      | Set to `1` to tag the build as a nightly/devel release.                                 |
 | `OPTIMIZE_LAUNCH`    | Set to `1` to enable the DWARFS profiling pass (same as `--optimize-launch`).           |
 | `OPTIMIZE_LAUNCH_TIMEOUT` | Profiling timeout in seconds (default `10`).                                       |
-| `SHIP_INTEGRITY_CHECKS` | Set to `1` to skip the pinned uruntime SHA-256 verification.                         |
+| `SKIP_INTEGRITY_CHECKS` | Set to `1` to skip the pinned uruntime SHA-256 verification.                         |
 
 ### AppDir requirements
 
