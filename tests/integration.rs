@@ -302,6 +302,54 @@ fn test_error_messages() {
     assert!(err.to_string().contains(".test"));
 }
 
+// ─── uruntime download + checksum tests ─────────────────────────────
+
+/// For every runtime arch the tool supports, download the pinned upstream
+/// uruntime via `resolve_runtime` and verify the cached binary matches the
+/// pinned SHA-256. Exercises the download URL, artifact name, and checksum
+/// pinning end-to-end against the network.
+#[test]
+fn test_uruntime_download_checksum_each_arch() {
+    use sha2::{Digest, Sha256};
+
+    for (arch, expected) in appimagetool::uruntime::RELEASE_CHECKSUMS {
+        let tmp = TempDir::new("appimagetool-uruntime-dl");
+        let config = Config::from_cli_args(CliArgs {
+            appdir: Some(tmp.path().join("AppDir")),
+            appimage_arch: Some(arch.to_string()),
+            tmpdir: Some(tmp.path().to_path_buf()),
+            ..Default::default()
+        })
+        .unwrap();
+
+        let runtime =
+            appimagetool::uruntime::resolve_runtime(&config).unwrap_or_else(|e| {
+                panic!("resolve_runtime failed for {arch}: {e}");
+            });
+
+        // The work copy must exist, be executable, and be a valid ELF.
+        let work = fs::read(&runtime).unwrap_or_else(|e| {
+            panic!("failed to read runtime for {arch}: {e}");
+        });
+        assert_eq!(&work[..4], b"\x7fELF", "{arch}: not an ELF binary");
+
+        // The cached pristine binary must match the pinned checksum.
+        let cached = tmp.path().join(format!("uruntime-{arch}"));
+        assert!(cached.exists(), "{arch}: cached binary missing");
+        let file = fs::read(&cached).unwrap();
+        let actual = format!("{:x}", Sha256::digest(&file));
+        assert_eq!(
+            actual, *expected,
+            "{arch}: cached uruntime checksum mismatch"
+        );
+        assert_eq!(
+            Sha256::digest(&work),
+            Sha256::digest(&file),
+            "{arch}: work copy differs from verified cache"
+        );
+    }
+}
+
 // ─── Full pipeline (requires mkdwarfs + uruntime, run with --ignored) ─
 
 #[test]

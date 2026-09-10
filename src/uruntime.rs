@@ -14,9 +14,39 @@ const MOUNT_MARKER: &[u8] = b"URUNTIME_MOUNT=";
 /// Default uruntime download URL pattern. Pinned for reproducible builds;
 /// override with `--runtime-url` / `URUNTIME_LINK` to track a different
 /// release. `{arch}` gets replaced with the target architecture.
-/// Points at our dwarfs-only uruntime fork, which publishes builds for
-/// every architecture appimagetool supports.
-const DEFAULT_URL_TEMPLATE: &str = "https://github.com/pkgforge-dev/Anylinux-uruntime/releases/download/1.0.0/uruntime-appimage-lite-{arch}";
+/// Points at the upstream uruntime release, which now publishes dwarfs
+/// builds for every architecture appimagetool supports.
+const DEFAULT_URL_TEMPLATE: &str = "https://github.com/VHSgunzo/uruntime/releases/download/v0.7.1/uruntime-appimage-dwarfs-lite-{arch}";
+
+/// SHA-256 of `uruntime-appimage-dwarfs-lite-{arch}` from the pinned release,
+/// computed from the GitHub release assets. Only enforced for the default URL;
+/// user-supplied `--runtime-url` overrides skip verification.
+pub const RELEASE_CHECKSUMS: &[(&str, &str)] = &[
+    (
+        "aarch64",
+        "bfcb5d2198d675419207345219766182cffa2515754ff813267118277156a07d",
+    ),
+    (
+        "loongarch64",
+        "331dcc5edec3ea117ea6647ae996d5a92d125a620f45ad3625fe902bd45da893",
+    ),
+    (
+        "ppc64",
+        "509649e8211f8ad105c44b2570c9c4df1fa296a48d09bd81db70d59944011647",
+    ),
+    (
+        "ppc64le",
+        "4c806d6b3385a7cc349030201004a4b079caa94ed18561eb033edbe038291f14",
+    ),
+    (
+        "riscv64",
+        "19eafe94ce285d546732abd73a37f0d0035ce8421c70eb52e8ac4e355aeefccc",
+    ),
+    (
+        "x86_64",
+        "f19d2a58b5f7cb372b8a88b1e9414fd118d8da6d2c555cf3e7c0bac9373b8af9",
+    ),
+];
 
 /// Ensure a runtime binary is available. Returns the path to the runtime.
 ///
@@ -38,12 +68,22 @@ pub fn resolve_runtime(config: &Config) -> Result<PathBuf> {
     let cached = config
         .tmpdir
         .join(format!("uruntime-{}", config.appimage_arch));
+    // Checksums are only known for the pinned default URL; user-supplied
+    // URLs are downloaded without verification.
+    let expected_checksum = if config.runtime_url.is_none() {
+        RELEASE_CHECKSUMS
+            .iter()
+            .find(|(arch, _)| *arch == config.appimage_arch)
+            .map(|(_, checksum)| *checksum)
+    } else {
+        None
+    };
     let url = config
         .runtime_url
         .as_deref()
         .unwrap_or(DEFAULT_URL_TEMPLATE)
         .replace("{arch}", &config.appimage_arch);
-    util::ensure_cached_binary(&cached, &url, "uruntime")?;
+    util::ensure_cached_binary(&cached, &url, "uruntime", expected_checksum)?;
 
     // Return a per-process working copy so concurrent builds don't clobber
     // each other and the cached original stays pristine.

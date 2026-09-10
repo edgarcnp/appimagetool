@@ -65,21 +65,108 @@ pub fn process_unique_path(dir: &Path, basename: &str) -> PathBuf {
     dir.join(format!("{basename}.{}", std::process::id()))
 }
 
+/// Env var that disables the pinned-artifact SHA-256 verification when set.
+const INTEGRITY_BYPASS_ENV: &str = "SHIP_INTEGRITY_CHECKS";
+
+fn integrity_checks_disabled() -> bool {
+    matches!(
+        std::env::var(INTEGRITY_BYPASS_ENV)
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("1" | "true" | "TRUE" | "True" | "yes" | "YES" | "Yes" | "on" | "ON" | "On")
+    )
+}
+
 /// Ensure a cached binary exists at `cached`, downloading from `url` if missing
-/// or invalid. The downloaded file is marked executable and verified to be ELF.
+/// or invalid. The downloaded file is marked executable, verified to be ELF,
+/// and optionally checksum-verified.
+/// If `expected_sha256` is set, the file is checksum-verified (cached entries
+/// included, so stale cached binaries are re-downloaded); pass `None` when
+/// using a user-supplied URL whose targets are unknown. Verification (and a
+/// fresh download attempt) is retried up to three times before failing.
+/// Integrity verification can be skipped entirely by setting
+/// `SHIP_INTEGRITY_CHECKS=1` in the environment.
 /// On verification failure the file is removed so the next run re-downloads.
-pub fn ensure_cached_binary(cached: &Path, url: &str, label: &str) -> Result<()> {
+pub fn ensure_cached_binary(
+    cached: &Path,
+    url: &str,
+    label: &str,
+    expected_sha256: Option<&str>,
+) -> Result<()> {
+    let expected_sha256 = if integrity_checks_disabled() {
+        None
+    } else {
+        expected_sha256
+    };
+
     if cached.exists() && is_elf(cached) {
+        if let Some(expected) = expected_sha256
+            && verify_checksum(cached, expected).is_err()
+        {
+            let _ = std::fs::remove_file(cached);
+            crate::log_info!("Cached {label} checksum mismatch, re-downloading from {url}...");
+            download_and_verify(cached, url, expected)?;
+        }
         return Ok(());
     }
-    crate::log_info!("Downloading {label} from {url}...");
-    download(url, cached)?;
+    if let Some(expected) = expected_sha256 {
+        crate::log_info!("Downloading {label} from {url}...");
+        download_and_verify(cached, url, expected)?;
+    } else {
+        crate::log_info!("Downloading {label} from {url}...");
+        download(url, cached)?;
+    }
     set_executable(cached)?;
     if !is_elf(cached) {
         let _ = std::fs::remove_file(cached);
         return Err(Error::DownloadFailed {
             url: url.to_string(),
             reason: "downloaded file is not a valid ELF binary".to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// Download and verify a file against an expected SHA-256, retrying the whole
+/// download on checksum mismatch (three attempts total). On success the file
+/// is marked executable; on repeated failure it is removed.
+fn download_and_verify(path: &Path, url: &str, expected: &str) -> Result<()> {
+    let mut last_err: Option<Error> = None;
+    for attempt in 0..3 {
+        if attempt > 0 {
+            crate::log_warn!("Checksum mismatch, retrying download in 5s...");
+            std::thread::sleep(std::time::Duration::from_secs(5));
+        }
+        download(url, path)?;
+        match verify_checksum(path, expected) {
+            Ok(()) => {
+                set_executable(path)?;
+                return Ok(());
+            }
+            Err(e) => {
+                let _ = std::fs::remove_file(path);
+                last_err = Some(e);
+            }
+        }
+    }
+    Err(last_err
+        .unwrap_or_else(|| Error::Io(std::io::Error::other("checksum verification failed"))))
+}
+
+/// Verify `path` against an expected lowercase hex SHA-256. Deletes the file
+/// (forcing a re-download next run) and errors on mismatch.
+fn verify_checksum(path: &Path, expected: &str) -> Result<()> {
+    use sha2::{Digest, Sha256};
+    let file = std::fs::File::open(path).map_err(Error::Io)?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut std::io::BufReader::new(file), &mut hasher).map_err(Error::Io)?;
+    let actual = format!("{:x}", hasher.finalize());
+    if actual != expected.to_ascii_lowercase() {
+        let _ = std::fs::remove_file(path);
+        return Err(Error::DownloadFailed {
+            url: path.display().to_string(),
+            reason: format!("sha256 mismatch: expected {expected}, got {actual}"),
         });
     }
     Ok(())

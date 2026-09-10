@@ -6,7 +6,7 @@
 
 A Rust implementation of `appimagetool` for the [Anylinux-AppImages](https://github.com/pkgforge-dev/Anylinux-AppImages) project.
 
-It takes a prepared AppDir and produces a finished `.AppImage` using DWARFS compression and the [uruntime](https://github.com/pkgforge-dev/Anylinux-uruntime) AppImage runtime. Single binary, no Python, no C++ deps.
+It takes a prepared AppDir and produces a finished `.AppImage` using DWARFS compression and the [uruntime](https://github.com/VHSgunzo/uruntime) AppImage runtime. Single binary, no Python, no C++ deps.
 
 ## Quick start
 
@@ -108,6 +108,7 @@ Every CLI option has a matching env var (shown above). A few extra knobs that ar
 | `DEVEL_RELEASE`      | Set to `1` to tag the build as a nightly/devel release.                                 |
 | `OPTIMIZE_LAUNCH`    | Set to `1` to enable the DWARFS profiling pass (same as `--optimize-launch`).           |
 | `OPTIMIZE_LAUNCH_TIMEOUT` | Profiling timeout in seconds (default `10`).                                       |
+| `SHIP_INTEGRITY_CHECKS` | Set to `1` to skip the pinned uruntime SHA-256 verification.                         |
 
 ### AppDir requirements
 
