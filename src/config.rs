@@ -119,7 +119,16 @@ impl Config {
         let appimage_arch = args
             .appimage_arch
             .or_else(|| env_opt("APPIMAGE_ARCH"))
-            .unwrap_or_else(|| env::consts::ARCH.to_string());
+            .unwrap_or_else(|| {
+                // env::consts::ARCH is "powerpc64" for both the powerpc64 and
+                // powerpc64le targets; endianness is only known at compile time
+                // via the target_endian cfg.
+                if env::consts::ARCH == "powerpc64" && cfg!(target_endian = "little") {
+                    "ppc64le".to_string()
+                } else {
+                    env::consts::ARCH.to_string()
+                }
+            });
         // Normalize rust arch spellings to the uname -m equivalent so the
         // download URLs resolve (e.g. powerpc64le -> ppc64le).
         let appimage_arch = match appimage_arch.as_str() {

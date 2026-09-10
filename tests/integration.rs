@@ -233,6 +233,23 @@ fn test_config_arch_falls_back_to_appimage_arch() {
 }
 
 #[test]
+fn test_config_normalizes_powerpc_arches() {
+    // `env::consts::ARCH` is "powerpc64" for both powerpc targets, so the
+    // explicit spellings must still normalize to the uname -m equivalents.
+    for (input, expected) in [("powerpc64", "ppc64"), ("powerpc64le", "ppc64le")] {
+        let tmp = TempDir::new("appimagetool-test-ppc-arch");
+        let config = Config::from_cli_args(CliArgs {
+            appdir: Some(tmp.path().join("AppDir")),
+            appimage_arch: Some(input.to_string()),
+            tmpdir: Some(tmp.path().to_path_buf()),
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(config.appimage_arch, expected, "input: {input}");
+    }
+}
+
+#[test]
 fn test_config_arch_alias_keeps_runtime_arch() {
     let tmp = TempDir::new("appimagetool-test-arch-alias");
 
