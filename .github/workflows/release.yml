@@ -103,13 +103,12 @@ jobs:
           sudo apt-get install -y --no-install-recommends musl-tools b3sum
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # nightly
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
         with:
           # the toolchain selector must be an explicit input now that the
           # action is pinned to a sha (the ref no longer carries it)
-          toolchain: nightly
+          toolchain: stable
           targets: ${{ matrix.build.TARGET }}
-          components: rust-src
 
       - name: Install zig
         if: ${{ matrix.build.ZIGTARGET }}
@@ -165,7 +164,7 @@ jobs:
             FEATURE_ARGS+=(--features "${{ matrix.variant.FEATURES }}")
           fi
           cargo build --release --locked "${FEATURE_ARGS[@]}" \
-            --target ${{ matrix.build.TARGET }} -Z build-std=std,panic_abort
+            --target ${{ matrix.build.TARGET }}
 
       - name: Prepare release assets
         shell: bash
